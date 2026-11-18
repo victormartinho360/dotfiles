@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# TMUX HELPER & PALETTE (Sessões, Janelas, Prompt ':' c/ Autocomplete e Ações)
+# ==============================================================================
+
+export PATH="$HOME/.local/bin:$PATH"
+MODE="${1:---cmd}"
+
+# Cores Tokyo Night padrão para os popups FZF
+TOKYO_COLORS="
+  --color=bg+:#292e42,bg:#16161e,spinner:#7dcfff,hl:#bb9af7
+  --color=fg:#c0caf5,header:#565f89,info:#7aa2f7,pointer:#7aa2f7
+  --color=marker:#9ece6a,fg+:#c0caf5,prompt:#7aa2f7,hl+:#7dcfff
+"
+
+# ------------------------------------------------------------------------------
+# 0. TERMINAL FLUTUANTE / SCRATCHPAD PERSISTENTE (--float)
+# ------------------------------------------------------------------------------
+if [[ "$MODE" == "--float" ]]; then
+  CURRENT_DIR="${2:-$PWD}"
+  CURRENT_SESSION=$(tmux display-message -p '#S')
+  # Se já estiver dentro do terminal flutuante (_popup), esconde ele (detach)!
+  if [[ "$CURRENT_SESSION" == "_popup" ]]; then
+    tmux detach-client
+    exit 0
+  fi
+  # Cria a sessão _popup em background se ainda não existir (sem barra de status duplicada)
+  if ! tmux has-session -t "_popup" 2>/dev/null; then
+    tmux new-session -d -s "_popup" -c "$CURRENT_DIR"
+    tmux set-option -t "_popup" status off
+  fi
+  # Abre o popup conectado à sessão _popup (assim a Leader Ctrl+' funciona lá dentro!)
+  tmux display-popup -E -w 85% -h 85% \
+    -T " #[fg=#7aa2f7,bold]󰆍 Terminal Flutuante (Ctrl+' -> f: Esconder | Ctrl+d: Fechar) " \
+    "TMUX= tmux attach-session -t _popup"
+  exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# 1. TROCAR SESSÃO COM FZF (--sessions) - Suporta nomes com espaço (ex: "Minestro DSE")
+# ------------------------------------------------------------------------------
+if [[ "$MODE" == "--list-sessions" ]]; then
+  tmux list-sessions -F "#{session_name}	#{session_windows} janela(s) #{?session_attached,(ativa),}" | \
+    grep -v '^_popup	' | \
+    awk -F'\t' '{printf "\033[1;38;2;122;162;247m%-24s\033[0m \033[38;2;86;95;137m%s\033[0m\t%s\n", $1, $2, $1}'
+  exit 0
+fi
+
+if [[ "$MODE" == "--sessions" ]]; then
+  CHOSEN=$(
+    "$0" --list-sessions | \
+    fzf --ansi --reverse --border=none $TOKYO_COLORS \
+      --delimiter=$'\t' \
+      --with-nth=1 \
+      --prompt=' 󰆍 Sessão > ' \
+      --pointer='󰅂' \
+      --header='Enter: Trocar p/ sessão  │  Ctrl-x: Matar sessão selecionada  │  Esc: Sair' \
+      --preview='tmux capture-pane -ep -t {2}' \
+      --preview-window='right:55%:wrap' \
+      --bind="ctrl-x:execute-silent(tmux kill-session -t {2})+reload($0 --list-sessions)"
+  )
+
+  TARGET=$(printf "%s" "$CHOSEN" | cut -f2)
+  if [[ -n "$TARGET" ]]; then
+    tmux switch-client -t "$TARGET"
+  fi
+  exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# 2. MATAR UMA OU MAIS SESSÕES COM FZF (--kill-session)
+# ------------------------------------------------------------------------------
+if [[ "$MODE" == "--kill-session" ]]; then
+  CHOSEN=$(
+    tmux list-sessions -F "#{session_name}	#{session_windows} janela(s) #{?session_attached,#[ativa],}" | grep -v '^_popup	' | \
+    awk -F'\t' '{printf "\033[1;38;2;247;118;142m%-24s\033[0m \033[38;2;86;95;137m%s\033[0m\t%s\n", $1, $2, $1}' | \
+    fzf --ansi --reverse --multi --border=none $TOKYO_COLORS \
+      --delimiter=$'\t' \
+      --with-nth=1 \
+      --prompt=' 󰆴 Matar Sessão > ' \
+      --pointer='󰅂' \
+      --marker='✗ ' \
+      --header='Tab: Marcar várias sessões  │  Enter: Matar selecionada(s)  │  Esc: Sair' \
+      --preview='tmux capture-pane -ep -t {2}' \
+      --preview-window='right:55%:wrap'
+  )
+
+  if [[ -n "$CHOSEN" ]]; then
+    while IFS= read -r line; do
+      TARGET=$(printf "%s" "$line" | cut -f2)
+      [[ -n "$TARGET" ]] && tmux kill-session -t "$TARGET"
+    done <<< "$CHOSEN"
+  fi
+  exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# 3. BUSCAR JANELA EM TODAS AS SESSÕES (--windows)
+# ------------------------------------------------------------------------------
+if [[ "$MODE" == "--windows" ]]; then
+  CHOSEN=$(
+    tmux list-windows -a -F "#{session_name}:#{window_index}	#{session_name} 󰅂 #I:#{window_name} (#{window_panes} painéis)" | \
+    awk -F'\t' '{printf "\033[1;38;2;125;207;255m%s\033[0m\t%s\n", $2, $1}' | \
+    fzf --ansi --reverse --border=none $TOKYO_COLORS \
+      --delimiter=$'\t' \
+      --with-nth=1 \
+      --prompt=' 󰖯 Janela > ' \
+      --pointer='󰅂' \
+      --header='Enter: Ir para janela  │  Esc: Sair' \
+      --preview='tmux capture-pane -ep -t {2}' \
+      --preview-window='right:55%:wrap'
+  )
+
+  TARGET=$(printf "%s" "$CHOSEN" | cut -f2)
+  if [[ -n "$TARGET" ]]; then
+    tmux switch-client -t "$TARGET"
+  fi
+  exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# 4. PROMPT DE COMANDO (:) COM AUTOCOMPLETE BOX (--cmd)
+# ------------------------------------------------------------------------------
+if [[ "$MODE" == "--cmd" ]]; then
+  export FZF_DEFAULT_OPTS="
+    --ansi
+    --layout=default
+    --border=none
+    --info=inline-right
+    --prompt=':'
+    --pointer='󰅂'
+    $TOKYO_COLORS
+    --color=prompt:#e0af68
+  "
+
+  SELECTION=$(
+    tmux list-commands | while IFS= read -r line; do
+      cmd_name="${line%% *}"
+      rest="${line#"$cmd_name"}"
+      printf "\033[1;38;2;122;162;247m%-24s\033[0m \033[38;2;86;95;137m%s\033[0m\t%s\n" \
+        "$cmd_name" "$rest" "$cmd_name"
+    done | \
+    fzf \
+      --delimiter=$'\t' \
+      --with-nth=1 \
+      --nth=1 \
+      --print-query \
+      --header="Tab: Autocompletar comando  │  Enter: Executar  │  ↑/↓: Navegar" \
+      --bind="tab:transform-query(printf '%s ' {2})"
+  )
+
+  EXIT_CODE=$?
+  if [[ $EXIT_CODE -ne 0 && $EXIT_CODE -ne 1 ]]; then
+    exit 0
+  fi
+
+  QUERY=$(printf "%s\n" "$SELECTION" | sed -n '1p')
+  CHOSEN=$(printf "%s\n" "$SELECTION" | sed -n '2p')
+  CMD_NAME=$(printf "%s" "$CHOSEN" | cut -f2)
+
+  if [[ "$QUERY" == *" "* ]]; then
+    eval "tmux $QUERY"
+  elif [[ -n "$CMD_NAME" ]]; then
+    eval "tmux $CMD_NAME"
+  elif [[ -n "$QUERY" ]]; then
+    eval "tmux $QUERY"
+  fi
+  exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# 5. PALETA DE AÇÕES RÁPIDAS (--actions)
+# ------------------------------------------------------------------------------
+export FZF_DEFAULT_OPTS="
+  --ansi
+  --layout=reverse
+  --border=none
+  --info=inline-right
+  --prompt=' 󰘳 Ação > '
+  --pointer='󰅂'
+  $TOKYO_COLORS
+"
+
+SELECTION=$(
+  cat <<'EOF' | sed $'s/^#\\[Ação\\]/\033[38;2;187;154;247m[Ação]\033[0m/' | fzf --delimiter=$'\t' --with-nth=1
+#[Ação]  󰯌 Painel: Dividir Vertical (Direita)          [Leader v]	split-window -h -c "#{pane_current_path}"
+#[Ação]  󰯌 Painel: Dividir Horizontal (Abaixo)         [Leader s]	split-window -v -c "#{pane_current_path}"
+#[Ação]  󰁌 Painel: Zoom / Maximizar Painel             [Leader z]	resize-pane -Z
+#[Ação]  󰓦 Painel: Sincronizar Digitação (Todos)       [Leader p =]	setw synchronize-panes \; display-message "Sync: #{?pane_synchronized,ON,OFF}"
+#[Ação]  󰯌 Painel: Transformar em Nova Janela          [Leader p !]	break-pane
+#[Ação]  󰯌 Painel: Equalizar Layout (Grade/Tiled)      [Leader r t]	select-layout tiled
+#[Ação]  󰯌 Painel: Fechar Painel Atual                 [Leader x]	confirm-before -p "Fechar painel? (y/n)" kill-pane
+#[Ação]  󰖯 Janela: Nova Janela (Tab)                   [Leader c]	new-window -c "#{pane_current_path}"
+#[Ação]  󰖯 Janela: Renomear Janela Atual               [Leader w r]	command-prompt -I "#W" "rename-window -- \"%%\""
+#[Ação]  󰖯 Janela: Fechar Janela Inteira               [Leader w x]	confirm-before -p "Fechar janela #W? (y/n)" kill-window
+#[Ação]  󰆍 Sessão: Nova Sessão com Nome                [Leader S n]	command-prompt -p "Nome da nova sessão:" "new-session -d -s \"%%\" \; switch-client -t \"%%\""
+#[Ação]  󰆍 Sessão: Renomear Sessão Atual               [Leader S r]	command-prompt -I "#S" "rename-session -- \"%%\""
+#[Ação]  󰆍 Sessão: Desconectar (Detach)                [Leader S d]	detach-client
+#[Ação]  󰆓 Persistência: Salvar Sessão (Resurrect)     [Leader S S]	run-shell ~/.tmux/plugins/tmux-resurrect/scripts/save.sh
+#[Ação]  󰑓 Persistência: Restaurar Sessão (Resurrect)  [Leader S R]	run-shell ~/.tmux/plugins/tmux-resurrect/scripts/restore.sh
+#[Ação]  󰑓 Config: Recarregar ~/.tmux.conf             [Leader P R]	source-file ~/.tmux.conf \; display-message " 󰑓 ~/.tmux.conf recarregado!"
+EOF
+)
+
+CMD=$(printf "%s" "$SELECTION" | cut -f2)
+if [[ -n "$CMD" ]]; then
+  eval "tmux $CMD"
+fi

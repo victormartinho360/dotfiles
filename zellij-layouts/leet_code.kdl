@@ -1,0 +1,24 @@
+layout {
+  default_tab_template {
+    children
+    pane size=1 borderless=true {
+      plugin location="zellij:status-bar"
+    }
+  }
+
+  tab name="leetcode" cwd="~/Projects/leet-code/" {
+    floating_panes {
+      pane {
+        command "nvim"
+        args "."
+        x "0%"
+        y "0%"
+        width "100%"
+        height "100%"
+        focus true
+      }
+
+    }
+    pane name="Runner"
+  }
+}

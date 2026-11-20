@@ -1,5 +1,5 @@
 # ==============================================================================
-# ZSH CONFIGURATION - Minimalist Tokyo Night + Hybrid Vi-Mode + FZF-Tab
+# ZSH CONFIGURATION - Minimalist Tokyo Night + Hybrid Vi-Mode
 # ==============================================================================
 
 # Se não for interativo, encerra imediatamente
@@ -13,14 +13,6 @@ export VISUAL="nvim"
 export PAGER="less"
 export KEYTIMEOUT=1
 
-# Homebrew (Linuxbrew) - inline para startup em 0ms
-if [[ -d /home/linuxbrew/.linuxbrew ]]; then
-  export HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
-  export HOMEBREW_CELLAR="/home/linuxbrew/.linuxbrew/Cellar"
-  export HOMEBREW_REPOSITORY="/home/linuxbrew/.linuxbrew/Homebrew"
-  fpath=("/home/linuxbrew/.linuxbrew/share/zsh/site-functions" $fpath)
-  export INFOPATH="/home/linuxbrew/.linuxbrew/share/info:${INFOPATH:-}"
-fi
 
 # Cargo / Rust
 [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
@@ -39,23 +31,23 @@ path=(
 )
 export PATH
 
-# ------------------------------------------------------------------------------
-# 2. LAZY-LOAD: CONDA (STARTUP INSTANTÂNEO)
-# ------------------------------------------------------------------------------
-# Conda é carregado apenas quando você chama `conda` pela primeira vez
-_lazy_conda_init() {
-  unfunction conda mamba 2>/dev/null
-  local __conda_setup
-  __conda_setup="$("$HOME/anaconda3/bin/conda" 'shell.zsh' 'hook' 2>/dev/null)"
-  if [[ $? -eq 0 ]]; then
-    eval "$__conda_setup"
-  elif [[ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]]; then
-    source "$HOME/anaconda3/etc/profile.d/conda.sh"
-  fi
-}
-conda() { _lazy_conda_init && conda "$@"; }
-mamba() { _lazy_conda_init && mamba "$@"; }
-
+# # ------------------------------------------------------------------------------
+# # 2. LAZY-LOAD: CONDA (STARTUP INSTANTÂNEO)
+# # ------------------------------------------------------------------------------
+# # Conda é carregado apenas quando você chama `conda` pela primeira vez
+# _lazy_conda_init() {
+#   unfunction conda mamba 2>/dev/null
+#   local __conda_setup
+#   __conda_setup="$("$HOME/anaconda3/bin/conda" 'shell.zsh' 'hook' 2>/dev/null)"
+#   if [[ $? -eq 0 ]]; then
+#     eval "$__conda_setup"
+#   elif [[ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]]; then
+#     source "$HOME/anaconda3/etc/profile.d/conda.sh"
+#   fi
+# }
+# conda() { _lazy_conda_init && conda "$@"; }
+# mamba() { _lazy_conda_init && mamba "$@"; }
+#
 # ------------------------------------------------------------------------------
 # 3. OPÇÕES DO ZSH & HISTÓRICO INTELIGENTE
 # ------------------------------------------------------------------------------
@@ -87,7 +79,7 @@ if [[ -x /usr/bin/dircolors ]]; then
 fi
 
 # ------------------------------------------------------------------------------
-# 4. PLUGINS & AUTOCOMPLETE (FZF-TAB + AUTOSUGGESTIONS + SYNTAX + SUBSTRING)
+# 4. PLUGINS & AUTOCOMPLETE (AUTOSUGGESTIONS + SYNTAX + SUBSTRING)
 # ------------------------------------------------------------------------------
 ZSH_PLUGIN_DIR="$HOME/.local/share/zsh/plugins"
 ZSH_CACHE_DIR="$HOME/.cache/zsh"
@@ -104,7 +96,6 @@ _ensure_zsh_plugin() {
 }
 
 _ensure_zsh_plugin "zsh-users/zsh-completions"
-_ensure_zsh_plugin "Aloxaf/fzf-tab"
 _ensure_zsh_plugin "marlonrichert/zsh-autocomplete"
 _ensure_zsh_plugin "zsh-users/zsh-autosuggestions"
 _ensure_zsh_plugin "zdharma-continuum/fast-syntax-highlighting"
@@ -136,7 +127,7 @@ zstyle ':completion:*:*:kill:*:processes' list-colors '=(#b) #([0-9]#)*=0=01;31'
 # Ativa o keymap Vi antes dos plugins para todos registrarem atalhos em `viins`
 bindkey -v
 
-# FZF base (carregado ANTES do fzf-tab para que o Tab continue com o fzf-tab-complete)
+# FZF base (Ctrl+R, Ctrl+T, Alt+C)
 export FZF_DEFAULT_OPTS=" \
   --height=60% \
   --layout=reverse \
@@ -152,39 +143,10 @@ if [[ -t 0 ]] && command -v fzf >/dev/null 2>&1; then
   source <(fzf --zsh)
 fi
 
+# Zoxide (necessário para o `z` usado na função cd lá embaixo)
 if command -v zoxide >/dev/null 2>&1; then
   eval "$(zoxide init zsh)"
 fi
-
-# Modo 1 (Padrão): fzf-tab (popup fuzzy no Tab com preview)
-# Modo 2 (Opcional): zsh-autocomplete (menu dropdown automático ao digitar, ative com `autocomplete-live`)
-if [[ "${ZSH_LIVE_AUTOCOMPLETE:-0}" == "1" ]] && [[ -f "$ZSH_PLUGIN_DIR/zsh-autocomplete/zsh-autocomplete.plugin.zsh" ]]; then
-  source "$ZSH_PLUGIN_DIR/zsh-autocomplete/zsh-autocomplete.plugin.zsh"
-elif [[ -f "$ZSH_PLUGIN_DIR/fzf-tab/fzf-tab.plugin.zsh" ]]; then
-  source "$ZSH_PLUGIN_DIR/fzf-tab/fzf-tab.plugin.zsh"
-  bindkey -M viins '^I' fzf-tab-complete
-
-  # Estilo Tokyo Night e Previews no fzf-tab
-  zstyle ':fzf-tab:*' fzf-flags \
-    --height=55% \
-    --layout=reverse \
-    --border=rounded \
-    --info=inline-right \
-    --pointer='󰅂' \
-    --marker='✓' \
-    --color='bg+:#283457,bg:#16161e,spinner:#7dcfff,hl:#bb9af7' \
-    --color='fg:#c0caf5,header:#7aa2f7,info:#e0af68,pointer:#bb9af7' \
-    --color='marker:#9ece6a,fg+:#c0caf5,prompt:#7aa2f7,hl+:#7dcfff,border:#3b4261'
-  zstyle ':fzf-tab:*' switch-group '<' '>'
-  zstyle ':fzf-tab:complete:cd:*' fzf-preview 'ls -la --color=always $realpath 2>/dev/null'
-  zstyle ':fzf-tab:complete:__zoxide_z:*' fzf-preview 'ls -la --color=always $realpath 2>/dev/null'
-  zstyle ':fzf-tab:complete:(nvim|vim|cat|less|head|tail):*' fzf-preview \
-    '[[ -d $realpath ]] && ls -la --color=always $realpath || head -n 100 $realpath 2>/dev/null'
-fi
-
-# Funções para alternar na hora entre fzf-tab e zsh-autocomplete live dropdown
-autocomplete-live() { export ZSH_LIVE_AUTOCOMPLETE=1 && exec zsh; }
-autocomplete-fzf()  { export ZSH_LIVE_AUTOCOMPLETE=0 && exec zsh; }
 
 # Carrega zsh-autosuggestions (sugestões em tempo real baseadas em histórico + completion)
 if [[ -f "$ZSH_PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh" ]]; then
@@ -211,7 +173,7 @@ fi
 # ------------------------------------------------------------------------------
 # 5. VI-MODE HÍBRIDO + ATALHOS DE TECLADO
 # ------------------------------------------------------------------------------
-bindkey -v
+# (bindkey -v já foi ativado na seção 4, antes dos plugins)
 
 # Editar comando atual diretamente no Neovim (Ctrl+X Ctrl+E no Insert ou `v` no Normal)
 autoload -Uz edit-command-line
@@ -270,7 +232,7 @@ if (( $+functions[history-substring-search-up] )); then
   bindkey -M vicmd 'j'    history-substring-search-down
 fi
 
-# (FZF e Zoxide já inicializados na seção 4 antes do fzf-tab)
+# (FZF e Zoxide já inicializados na seção 4)
 
 # ------------------------------------------------------------------------------
 # 7. PROMPT TOKYO NIGHT MINIMALISTA (1 LINHA)
@@ -338,7 +300,7 @@ RPROMPT='${_prompt_cmd_time}'
 # ------------------------------------------------------------------------------
 # 8. ALIASES & FUNÇÕES ÚTEIS
 # ------------------------------------------------------------------------------
-alias ls='ls --color=auto'
+alias ls="g --icons -1"
 alias ll='ls -alFh --color=auto'
 alias la='ls -AF --color=auto'
 alias l='ls -CF --color=auto'
@@ -372,3 +334,12 @@ if command -v fastfetch >/dev/null 2>&1 && [[ -z "$FASTFETCH_SHOWN" ]]; then
     fastfetch
   fi
 fi
+## Função do cd com list
+cd() {
+    z "$@" || return $?
+    if [[ "$PWD" == "$HOME" ]]; then
+        fastfetch
+    else
+        g --icon --tree
+    fi
+}
